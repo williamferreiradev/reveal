@@ -5,6 +5,11 @@ import { createClient } from '@supabase/supabase-js'
 export default defineEventHandler(async (event) => {
     const user = await serverSupabaseUser(event)
 
+    // DEBUG LOGS
+    console.log('--- VERIFY ACCESS DEBUG ---')
+    console.log('Cookies:', getHeader(event, 'cookie'))
+    console.log('User found:', user ? user.id : 'NO USER')
+
     if (!user || !user.id || user.id === 'undefined') {
         console.error('Invalid User Session:', user)
         throw createError({
