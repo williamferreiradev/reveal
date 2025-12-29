@@ -171,6 +171,22 @@ watch(user, (newUser) => {
     }
 }, { immediate: true })
 
+onMounted(() => {
+    if (user.value) {
+        loadProfile()
+    } else {
+        // Safety check: if stuck loading for 3s without user, redirect
+        setTimeout(() => {
+            if (!user.value) {
+                router.push('/login')
+            } else {
+                // If user arrived late, try loading again
+                loadProfile()
+            }
+        }, 3000)
+    }
+})
+
 const handleLogout = async () => {
     await client.auth.signOut()
     router.push('/login')
