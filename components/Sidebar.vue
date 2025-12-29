@@ -28,26 +28,36 @@ onMounted(async () => {
     initTheme()
     
     // Fetch Profile
-    if (user.value) {
-        const { data } = await client
-            .from('users')
-            .select('nome, fotos, temacessoadm')
-            .eq('user_id', user.value.id)
-            .single()
-            
-        if (data) {
-            let avatar = data.fotos
-            try {
-                if (avatar && avatar.startsWith('[')) {
-                    avatar = JSON.parse(avatar)[0]
+    // Fetch Profile
+    if (user.value && user.value.id) {
+        try {
+            const { data: { session } } = await client.auth.getSession()
+            const token = session?.access_token
+
+            if (token) {
+                const data: any = await $fetch('/api/profile', {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                })
+
+                if (data) {
+                    let avatar = data.fotos
+                    try {
+                        if (avatar && avatar.startsWith('[')) {
+                            avatar = JSON.parse(avatar)[0]
+                        }
+                    } catch (e) {}
+                    
+                    userProfile.value = {
+                        name: data.nome || 'Admin',
+                        avatar: avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.nome || 'A')}&background=random`,
+                        role: data.temacessoadm ? 'Administrador' : 'Usuário'
+                    }
                 }
-            } catch (e) {}
-            
-            userProfile.value = {
-                name: data.nome || 'Admin',
-                avatar: avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.nome || 'A')}&background=random`,
-                role: data.temacessoadm ? 'Administrador' : 'Usuário'
             }
+        } catch (e) {
+            console.error('Error loading profile:', e)
         }
     }
 })

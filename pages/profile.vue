@@ -22,24 +22,29 @@ const isLoading = ref(true)
 const fetchProfile = async () => {
     isLoading.value = true
     try {
-        if (user.value) {
-            const { data, error } = await client
-                .from('users')
-                .select('*')
-                .eq('user_id', user.value.id)
-                .single()
-            
-            if (data) {
-                let avatar = data.fotos
-                try {
-                    if (avatar && avatar.startsWith('[')) {
-                        avatar = JSON.parse(avatar)[0]
-                    }
-                } catch (e) {}
+        if (user.value && user.value.id) {
+            const { data: { session } } = await client.auth.getSession()
+            const token = session?.access_token
 
-                profile.value = {
-                    ...data,
-                    avatar: avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.nome)}&background=random`,
+            if (token) {
+                const data: any = await $fetch('/api/profile', {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                })
+                
+                if (data) {
+                    let avatar = data.fotos
+                    try {
+                        if (avatar && avatar.startsWith('[')) {
+                            avatar = JSON.parse(avatar)[0]
+                        }
+                    } catch (e) {}
+
+                    profile.value = {
+                        ...data,
+                        avatar: avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.nome)}&background=random`,
+                    }
                 }
             }
         }

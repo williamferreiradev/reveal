@@ -6,21 +6,27 @@ const client = useSupabaseClient()
 const router = useRouter()
 
 onMounted(async () => {
-  if (user.value) {
+  if (user.value && user.value.id) {
     try {
-      const { data, error } = await client
-        .from('users')
-        .select('temacessoadm')
-        .eq('user_id', user.value.id)
-        .single()
+      // Use our robust server API instead of direct DB query (avoids RLS/Undefined issues)
+      const { data: { session } } = await client.auth.getSession()
+      const token = session?.access_token
+      
+      if (token) {
+           const { isAdmin } = await $fetch('/api/verify-access', {
+                headers: { Authorization: `Bearer ${token}` }
+           })
 
-      if (error || !data || !data.temacessoadm) {
-        console.warn('Persistent check failed: Access revoked.')
-        await client.auth.signOut()
-        router.push('/login')
+           if (!isAdmin) {
+                console.warn('Persistent check failed: Access revoked.')
+                await client.auth.signOut()
+                router.push('/login')
+           }
       }
     } catch (e) {
       console.error('Security check error:', e)
+      // Optional: Redirect on error? Or just log? 
+      // Safe to ignore transient network errors to avoid locking user out unnecessarily
     }
   }
 })
