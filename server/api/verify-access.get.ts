@@ -3,58 +3,53 @@ import { serverSupabaseUser } from '#supabase/server'
 import { createClient } from '@supabase/supabase-js'
 
 export default defineEventHandler(async (event) => {
-    const user = await serverSupabaseUser(event)
+    // 1. Extract Token from Header
+    const authHeader = getHeader(event, 'authorization')
+    const token = authHeader?.replace('Bearer ', '')
 
-    // DEBUG LOGS
-    const config = useRuntimeConfig()
-    const url = process.env.SUPABASE_URL || config.public?.supabaseUrl || 'MISSING'
-    // CHECK ANON KEY
-    const anonKey = process.env.SUPABASE_KEY || config.public?.supabaseKey
-
-    // LOG COOKIE NAMES FOR DEBUGGING
-    const cookieHeader = getHeader(event, 'cookie') || ''
-    const cookieNames = cookieHeader.split(';').map(c => c.trim().split('=')[0])
-
-    console.log('--- VERIFY ACCESS DEBUG ---')
-    console.log('Cookies present:', !!cookieHeader)
-    console.log('Cookie Names:', cookieNames)
-    console.log('Supabase URL Config:', url)
-    console.log('Anon Key Present:', !!anonKey)
-    console.log('User found:', user ? user.id : 'NO USER')
-
-    if (!user || !user.id || user.id === 'undefined') {
-        const debugInfo = {
-            cookiesPresent: !!cookieHeader,
-            cookieNames: cookieNames,
-            supabaseUrlStart: url ? url.substring(0, 15) + '...' : 'MISSING',
-            hasServiceKey: !!(process.env.SUPABASE_SERVICE_KEY || config.supabase?.serviceKey),
-            hasAnonKey: !!anonKey
-        }
-        console.error('Invalid User Session:', debugInfo)
-
+    if (!token) {
         throw createError({
             statusCode: 401,
-            statusMessage: `Debug: AnonKey=${debugInfo.hasAnonKey}, Cookies=${debugInfo.cookieNames.join(',')}`,
-            data: debugInfo
+            statusMessage: 'Unauthorized: No token provided.'
         })
     }
 
-    // Use Service Role Key to bypass RLS and strictly check permissions
-    // config variable already defined above
-    // Robust key retrieval
+    // 2. Setup Config
+    const config = useRuntimeConfig()
     const supabaseUrl = process.env.SUPABASE_URL || config.public?.supabaseUrl
+    const supabaseAnonKey = process.env.SUPABASE_KEY || config.public?.supabaseKey
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || config.supabase?.serviceKey
 
-    if (!supabaseUrl || !supabaseServiceKey) {
-        console.error('Server Config Error: URL or Service Key missing.')
-        console.error('URL Present:', !!supabaseUrl)
-        console.error('Key Present:', !!supabaseServiceKey)
+    // Debug Log (Short)
+    console.log('Verify-Access: Checking token...')
+
+    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
+        console.error('Server Config Error. Missing:', {
+            url: !!supabaseUrl,
+            anon: !!supabaseAnonKey,
+            service: !!supabaseServiceKey
+        })
         throw createError({
             statusCode: 500,
-            statusMessage: 'Configuration error on server.'
+            statusMessage: 'Server Config Error: Missing Keys'
         })
     }
 
+    // 3. Verify Token using Anon Client (Standard Auth Check)
+    const supabase = createClient(supabaseUrl, supabaseAnonKey)
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+
+    if (userError || !user) {
+        console.error('Token Verification Failed:', userError)
+        throw createError({
+            statusCode: 401,
+            statusMessage: 'Unauthorized: Invalid token.'
+        })
+    }
+
+    console.log('User Verified:', user.id)
+
+    // 4. Verify Admin Access with Service Key (Bypass RLS)
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
         auth: {
             autoRefreshToken: false,
@@ -69,19 +64,18 @@ export default defineEventHandler(async (event) => {
         .single()
 
     if (error) {
-        console.error('SERVER VERIFY ERROR:', error)
-        console.error('User ID being checked:', user.id)
+        console.error('Database Error:', error)
         throw createError({
             statusCode: 500,
-            statusMessage: `Database error: ${error.message} (${error.code})`
+            statusMessage: `Database error: ${error.message}`
         })
     }
 
     if (!data || !data.temacessoadm) {
-        console.warn('User found but NOT Admin. ID:', user.id)
+        console.warn('User is NOT admin:', user.id)
         return { isAdmin: false }
     }
 
-    console.log('Admin Access Verified for:', user.id)
+    console.log('Admin Access Granted:', user.id)
     return { isAdmin: true }
 })
