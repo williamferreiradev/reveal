@@ -31,7 +31,16 @@ const handleLogin = async () => {
             // 2. Check Admin Permission via Server (Bypasses RLS)
             try {
                 // Wait a moment for session to propagate if needed, though usually immediate
-                const { isAdmin } = await $fetch('/api/verify-access')
+                const { data: { session } } = await supabase.auth.getSession()
+                const token = session?.access_token
+
+                if (!token) throw new Error('Falha ao obter token de sessão.')
+
+                const { isAdmin } = await $fetch('/api/verify-access', {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                })
 
                 if (!isAdmin) {
                     // 3. Unauthorized: Access Denied

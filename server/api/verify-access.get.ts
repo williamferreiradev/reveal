@@ -6,26 +6,35 @@ export default defineEventHandler(async (event) => {
     const user = await serverSupabaseUser(event)
 
     // DEBUG LOGS
-    const cookies = getHeader(event, 'cookie') || ''
     const config = useRuntimeConfig()
     const url = process.env.SUPABASE_URL || config.public?.supabaseUrl || 'MISSING'
+    // CHECK ANON KEY
+    const anonKey = process.env.SUPABASE_KEY || config.public?.supabaseKey
+
+    // LOG COOKIE NAMES FOR DEBUGGING
+    const cookieHeader = getHeader(event, 'cookie') || ''
+    const cookieNames = cookieHeader.split(';').map(c => c.trim().split('=')[0])
 
     console.log('--- VERIFY ACCESS DEBUG ---')
-    console.log('Cookies present:', !!cookies)
+    console.log('Cookies present:', !!cookieHeader)
+    console.log('Cookie Names:', cookieNames)
     console.log('Supabase URL Config:', url)
+    console.log('Anon Key Present:', !!anonKey)
     console.log('User found:', user ? user.id : 'NO USER')
 
     if (!user || !user.id || user.id === 'undefined') {
         const debugInfo = {
-            cookiesPresent: !!cookies,
+            cookiesPresent: !!cookieHeader,
+            cookieNames: cookieNames,
             supabaseUrlStart: url ? url.substring(0, 15) + '...' : 'MISSING',
-            hasServiceKey: !!(process.env.SUPABASE_SERVICE_KEY || config.supabase?.serviceKey)
+            hasServiceKey: !!(process.env.SUPABASE_SERVICE_KEY || config.supabase?.serviceKey),
+            hasAnonKey: !!anonKey
         }
         console.error('Invalid User Session:', debugInfo)
 
         throw createError({
             statusCode: 401,
-            statusMessage: `Unauth Debug: Cookies=${debugInfo.cookiesPresent}, URL=${debugInfo.supabaseUrlStart}, SvcKey=${debugInfo.hasServiceKey}`,
+            statusMessage: `Debug: AnonKey=${debugInfo.hasAnonKey}, Cookies=${debugInfo.cookieNames.join(',')}`,
             data: debugInfo
         })
     }
