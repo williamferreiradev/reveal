@@ -18,48 +18,83 @@ const user = useSupabaseUser()
 const router = useRouter()
 const { isDark, toggleTheme, initTheme } = useTheme()
 
+// Initialize with safe fallbacks immediately
 const userProfile = ref<any>({
-    name: 'Admin User',
-    avatar: '',
-    role: 'Carregando...'
+    name: 'Usuário',
+    avatar: 'https://ui-avatars.com/api/?name=U&background=0D8ABC&color=fff',
+    role: '...'
 })
+
+const updateProfileFromAuth = () => {
+    if (user.value) {
+        const name = user.value.user_metadata?.name || user.value.email?.split('@')[0] || 'Usuário'
+        userProfile.value = {
+            name: name,
+            avatar: user.value.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0D8ABC&color=fff`,
+            role: userProfile.value.role === '...' ? 'Usuário' : userProfile.value.role
+        }
+    }
+}
+
+const loadProfile = async () => {
+    // 1. Set immediate fallback from Auth state
+    updateProfileFromAuth()
+    
+    if (!user.value || !user.value.id) return
+
+    try {
+        const { data: { session } } = await client.auth.getSession()
+        const token = session?.access_token
+
+        if (token) {
+            const data: any = await $fetch('/api/profile', {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            })
+
+            if (data) {
+                let avatar = data.fotos
+                try {
+                    if (avatar && avatar.startsWith('[')) {
+                        avatar = JSON.parse(avatar)[0]
+                    }
+                } catch (e) {}
+                
+                // Construct final profile
+                const finalName = data.nome || user.value.user_metadata?.name || 'Usuário'
+                
+                userProfile.value = {
+                    name: finalName,
+                    avatar: avatar || user.value.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(finalName)}&background=0D8ABC&color=fff`,
+                    role: data.temacessoadm ? 'Administrador' : 'Usuário'
+                }
+            }
+        }
+    } catch (e) {
+        console.error('[Sidebar] Error loading profile:', e)
+        // Keep the fallback from auth, just update role validation
+        const currentName = userProfile.value.name || 'Usuário'
+        userProfile.value = {
+            ...userProfile.value,
+            role: 'Usuário', // Default to basic user on error
+            avatar: userProfile.value.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentName)}&background=0D8ABC&color=fff`
+        }
+    }
+}
+
+// Watch for user changes
+watch(user, (newUser) => {
+    if (newUser) {
+        updateProfileFromAuth()
+        if (newUser.id) loadProfile()
+    }
+}, { immediate: true })
 
 onMounted(async () => {
     initTheme()
-    
-    // Fetch Profile
-    // Fetch Profile
-    if (user.value && user.value.id) {
-        try {
-            const { data: { session } } = await client.auth.getSession()
-            const token = session?.access_token
-
-            if (token) {
-                const data: any = await $fetch('/api/profile', {
-                    headers: {
-                        Authorization: `Bearer ${token}`
-                    }
-                })
-
-                if (data) {
-                    let avatar = data.fotos
-                    try {
-                        if (avatar && avatar.startsWith('[')) {
-                            avatar = JSON.parse(avatar)[0]
-                        }
-                    } catch (e) {}
-                    
-                    userProfile.value = {
-                        name: data.nome || 'Admin',
-                        avatar: avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.nome || 'A')}&background=random`,
-                        role: data.temacessoadm ? 'Administrador' : 'Usuário'
-                    }
-                }
-            }
-        } catch (e) {
-            console.error('Error loading profile:', e)
-        }
-    }
+    updateProfileFromAuth()
+    loadProfile()
 })
 
 const handleLogout = async () => {
@@ -136,15 +171,15 @@ onMounted(() => {
           </div>
         </button>
 
-        <NuxtLink to="/profile" class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-surface-lighter transition-colors group">
-            <div class="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-700 overflow-hidden border-2 border-transparent group-hover:border-primary transition-colors">
+        <div class="flex items-center gap-3 p-2 rounded-lg transition-colors">
+            <div class="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-700 overflow-hidden border-2 border-transparent transition-colors">
                 <img :src="userProfile.avatar" alt="User" class="w-full h-full object-cover" />
             </div>
             <div class="flex-1 min-w-0">
                 <p class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ userProfile.name }}</p>
                 <p class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ userProfile.role }}</p>
             </div>
-        </NuxtLink>
+        </div>
 
         <button @click="handleLogout" class="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-red-500/20 text-red-500 hover:bg-red-50/50 dark:hover:bg-red-500/10 transition-colors text-sm font-medium">
             <LogOut :size="16" />

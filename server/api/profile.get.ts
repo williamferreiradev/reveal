@@ -46,21 +46,21 @@ export default defineEventHandler(async (event) => {
         }
     })
 
-    const { data, error } = await supabaseAdmin
+    const { data: profileData, error } = await supabaseAdmin
         .from('users')
         .select('*')
         .eq('user_id', user.id)
         .single()
 
-    if (error) {
-        console.error('Error fetching profile:', error)
-        // Return empty or null, or throw? 
-        // 404 might be appropriate if user SHOULD exist
-        throw createError({
-            statusCode: 404,
-            statusMessage: 'Profile not found'
-        })
+    if (error || !profileData) {
+        console.warn('Profile not found in public.users, returning auth fallback:', error?.message)
+        return {
+            nome: user.user_metadata?.name || user.email?.split('@')[0] || 'Usuário',
+            fotos: user.user_metadata?.avatar_url || null,
+            temacessoadm: false,
+            email: user.email
+        }
     }
 
-    return data
+    return profileData
 })

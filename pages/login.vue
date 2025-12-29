@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { Mail, Lock, ArrowRight } from 'lucide-vue-next'
+import { Mail, Lock, ArrowRight, Eye, EyeOff } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
 
 definePageMeta({
   layout: 'auth'
 })
-
 
 const supabase = useSupabaseClient()
 const router = useRouter()
@@ -12,11 +12,17 @@ const router = useRouter()
 const email = ref('')
 const password = ref('')
 const isLoading = ref(false)
-const errorMsg = ref('')
+const showPassword = ref(false)
 
 const handleLogin = async () => {
+    // Validate inputs
+    if (!email.value || !password.value) {
+        toast.warning('Por favor, preencha todos os campos.')
+        return
+    }
+
     isLoading.value = true
-    errorMsg.value = ''
+    const toastId = toast.loading('Autenticando...', { duration: Infinity })
 
     try {
         // 1. Authenticate with Supabase Auth
@@ -28,9 +34,8 @@ const handleLogin = async () => {
         if (authError) throw authError
 
         if (authData.user) {
-            // 2. Check Admin Permission via Server (Bypasses RLS)
+            // 2. Check Admin Permission via Server
             try {
-                // Wait a moment for session to propagate if needed, though usually immediate
                 const { data: { session } } = await supabase.auth.getSession()
                 const token = session?.access_token
 
@@ -43,29 +48,30 @@ const handleLogin = async () => {
                 })
 
                 if (!isAdmin) {
-                    // 3. Unauthorized: Access Denied
                     await supabase.auth.signOut()
                     throw new Error('Acesso negado. Você não tem permissão de administrador.')
                 }
 
-                // 4. Authorized: Redirect to Dashboard
+                // Success
+                toast.dismiss(toastId)
+                toast.success('Login realizado com sucesso! Redirecionando...')
                 router.push('/')
 
             } catch (verr: any) {
                 console.error('Verification error:', verr)
                 await supabase.auth.signOut()
-                // Show the specific error from the server/network
                 const msg = verr.statusMessage || verr.message || 'Erro desconhecido na validação'
                 throw new Error(`Falha de validação: ${msg}`)
             }
         }
     } catch (e: any) {
         console.error('Login error:', e)
-        errorMsg.value = e.message || 'Erro ao realizar login.'
-        // Auto-hide error after 5s
-        setTimeout(() => errorMsg.value = '', 5000)
+        toast.dismiss(toastId)
+        toast.error(e.message || 'Erro ao realizar login. Verifique suas credenciais.')
     } finally {
         isLoading.value = false
+        // Ensure toast is dismissed if not already
+        setTimeout(() => toast.dismiss(toastId), 5000) 
     }
 }
 </script>
@@ -76,7 +82,7 @@ const handleLogin = async () => {
     <!-- Custom Background Image -->
     <div class="absolute top-0 left-0 w-full h-full">
         <img src="/login-bg.png" alt="Background" class="w-full h-full object-cover opacity-100" />
-        <div class="absolute inset-0 bg-black/30"></div> <!-- Slight overlay for text readability -->
+        <div class="absolute inset-0 bg-black/30"></div> 
     </div>
 
     <!-- Main Container -->
@@ -95,14 +101,14 @@ const handleLogin = async () => {
 
                 <!-- Big Title -->
                 <h1 class="text-5xl md:text-6xl font-bold leading-tight">
-                    A Melhor Plataforma <br />
-                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-400">De Gestão</span>
+                    Bem-vindo ao <br />
+                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-400">Reveal</span>
                 </h1>
 
                 <!-- Description -->
                 <p class="text-lg text-gray-300 max-w-lg leading-relaxed">
-                    Eleve a eficiência do seu fluxo de trabalho com o login intuitivo e seguro do Reveal. 
-                    Projetado para simplicidade e velocidade, garantindo que sua jornada na plataforma seja incrível.
+                    Métricas confiáveis. Interface inteligente.
+Acesse sua central de decisões com segurança e agilidade.
                 </p>
             </div>
 
@@ -138,22 +144,28 @@ const handleLogin = async () => {
                                     <Lock class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-white transition-colors" :size="20" />
                                     <input 
                                         v-model="password"
-                                        type="password" 
+                                        :type="showPassword ? 'text' : 'password'" 
                                         placeholder="••••••••"
-                                        class="w-full bg-black/20 border border-white/10 rounded-xl py-4 pl-12 pr-4 text-white placeholder-gray-400 focus:outline-none focus:bg-black/30 focus:border-white/30 transition-all font-medium"
+                                        class="w-full bg-black/20 border border-white/10 rounded-xl py-4 pl-12 pr-12 text-white placeholder-gray-400 focus:outline-none focus:bg-black/30 focus:border-white/30 transition-all font-medium"
                                     />
-                                    <button type="button" class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500 hover:text-white uppercase transition-colors">
-                                        Show
+                                    <button 
+                                        type="button" 
+                                        @click="showPassword = !showPassword"
+                                        class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors focus:outline-none"
+                                    >
+                                        <component :is="showPassword ? Eye : EyeOff" :size="20" />
                                     </button>
                                 </div>
                             </div>
 
                             <button 
                                 type="submit"
-                                class="w-full bg-gradient-to-r from-primary to-orange-600 hover:from-orange-500 hover:to-orange-700 text-white font-bold py-4 rounded-xl shadow-lg transform active:scale-95 transition-all duration-200 flex items-center justify-between px-6 mt-4 group"
+                                :disabled="isLoading"
+                                class="w-full bg-gradient-to-r from-primary to-orange-600 hover:from-orange-500 hover:to-orange-700 text-white font-bold py-4 rounded-xl shadow-lg transform active:scale-95 transition-all duration-200 flex items-center justify-between px-6 mt-4 group disabled:opacity-70 disabled:cursor-not-allowed"
                             >
-                                <span>Acessar minha conta</span>
-                                <ArrowRight class="group-hover:translate-x-1 transition-transform" :size="20" />
+                                <span>{{ isLoading ? 'Autenticando...' : 'Acessar minha conta' }}</span>
+                                <ArrowRight v-if="!isLoading" class="group-hover:translate-x-1 transition-transform" :size="20" />
+                                <div v-else class="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
                             </button>
 
                         </form>
