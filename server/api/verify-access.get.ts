@@ -31,9 +31,8 @@ export default defineEventHandler(async (event) => {
     }
 
     // Use Service Role Key to bypass RLS and strictly check permissions
-    const config = useRuntimeConfig()
+    // config variable already defined above
     // Robust key retrieval
-    const supabaseUrl = process.env.SUPABASE_URL || config.public?.supabaseUrl
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || config.supabase?.serviceKey
 
     if (!supabaseUrl || !supabaseServiceKey) {
