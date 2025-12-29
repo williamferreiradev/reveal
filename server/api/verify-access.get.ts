@@ -6,15 +6,27 @@ export default defineEventHandler(async (event) => {
     const user = await serverSupabaseUser(event)
 
     // DEBUG LOGS
+    const cookies = getHeader(event, 'cookie') || ''
+    const config = useRuntimeConfig()
+    const url = process.env.SUPABASE_URL || config.public?.supabaseUrl || 'MISSING'
+
     console.log('--- VERIFY ACCESS DEBUG ---')
-    console.log('Cookies:', getHeader(event, 'cookie'))
+    console.log('Cookies present:', !!cookies)
+    console.log('Supabase URL Config:', url)
     console.log('User found:', user ? user.id : 'NO USER')
 
     if (!user || !user.id || user.id === 'undefined') {
-        console.error('Invalid User Session:', user)
+        const debugInfo = {
+            cookiesPresent: !!cookies,
+            supabaseUrlStart: url ? url.substring(0, 15) + '...' : 'MISSING',
+            hasServiceKey: !!(process.env.SUPABASE_SERVICE_KEY || config.supabase?.serviceKey)
+        }
+        console.error('Invalid User Session:', debugInfo)
+
         throw createError({
             statusCode: 401,
-            statusMessage: 'Unauthorized: Invalid session or missing User ID.'
+            statusMessage: `Unauth Debug: Cookies=${debugInfo.cookiesPresent}, URL=${debugInfo.supabaseUrlStart}, SvcKey=${debugInfo.hasServiceKey}`,
+            data: debugInfo
         })
     }
 
