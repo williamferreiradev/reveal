@@ -268,7 +268,9 @@ export const useDashboardData = () => {
                 query = query.eq('user_id', userId)
             }
 
-            const { data: user, error: userError } = await query.single()
+            const { data: user, error: userError } = await query
+                .select('*, podeanunciar')
+                .single()
 
             if (userError) throw userError
 

@@ -102,13 +102,20 @@ const handleLogout = async () => {
     router.push('/login')
 }
 
-const menuItems = [
+interface MenuItem {
+  name: string
+  path: string
+  icon: any
+  badge?: string
+}
+
+const menuItems: MenuItem[] = [
   { name: 'Home', path: '/', icon: Home },
   { name: 'Usuários', path: '/users', icon: Users },
   { name: 'Posts', path: '/posts', icon: FileText },
   { name: 'Analytics', path: '/analytics', icon: BarChart2 },
   { name: 'Análise', path: '/analysis', icon: Search },
-  { name: 'Denúncias', path: '/reports', icon: AlertTriangle, badge: 'Em breve' },
+  { name: 'Suporte', path: '/reports', icon: AlertTriangle },
 ]
 
 const isActive = (path: string) => route.path === path

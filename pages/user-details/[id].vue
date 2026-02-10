@@ -5,8 +5,13 @@ import {
     MapPin,
     Calendar,
     Link as LinkIcon,
-    ArrowLeft
+    ArrowLeft,
+    AlertTriangle,
+    CheckCircle,
+    Ban,
+    Megaphone
 } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,6 +22,8 @@ const user = ref<any>(null)
 const posts = ref<any[]>([])
 const isLoading = ref(true)
 const activeTab = ref('showcase')
+const showConfirmModal = ref(false)
+const isTogglingPermission = ref(false)
 
 const fetchUser = async () => {
     isLoading.value = true
@@ -41,6 +48,49 @@ const goBack = () => router.push('/users')
 const formatDate = (date: string) => {
     if (!date) return 'N/A'
     return new Date(date).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+}
+
+// Ad Permission Toggle
+const toggleAdPermission = async () => {
+    if (!user.value) return
+
+    // If blocking, show confirmation modal
+    if (user.value.podeanunciar === true) {
+        showConfirmModal.value = true
+        return
+    }
+
+    // If enabling, proceed directly
+    await executeToggle()
+}
+
+const executeToggle = async () => {
+    if (!user.value) return
+
+    isTogglingPermission.value = true
+    const newStatus = !user.value.podeanunciar
+
+    try {
+        const result = await $fetch('/api/admin/toggle-ad-permission', {
+            method: 'POST',
+            body: {
+                userId: user.value.user_id,
+                newStatus
+            }
+        })
+
+        // Update local user data
+        user.value.podeanunciar = newStatus
+        
+        toast.success(result.message || 'Permissão atualizada com sucesso!')
+        showConfirmModal.value = false
+
+    } catch (error: any) {
+        console.error('Error toggling ad permission:', error)
+        toast.error(error.data?.statusMessage || 'Erro ao atualizar permissão')
+    } finally {
+        isTogglingPermission.value = false
+    }
 }
 </script>
 
@@ -116,9 +166,22 @@ const formatDate = (date: string) => {
                             </div>
                         </div>
 
-                         <!-- Action Button -->
-                         <button class="w-full bg-primary hover:bg-primary-dark text-white font-medium py-2.5 rounded-lg transition-colors shadow-lg shadow-orange-500/20">
-                            Exibir Informações
+                         <!-- Ad Permission Toggle Button -->
+                         <button 
+                            @click="toggleAdPermission"
+                            :disabled="isTogglingPermission"
+                            class="w-full font-medium py-2.5 rounded-lg transition-colors shadow-lg flex items-center justify-center gap-2"
+                            :class="user.podeanunciar 
+                                ? 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/20' 
+                                : 'bg-green-500 hover:bg-green-600 text-white shadow-green-500/20'
+                            "
+                         >
+                            <Megaphone v-if="!user.podeanunciar" :size="18" />
+                            <Ban v-else :size="18" />
+                            <span v-if="!isTogglingPermission">
+                                {{ user.podeanunciar ? 'Bloquear anúncios' : 'Liberar para anunciar' }}
+                            </span>
+                            <span v-else>Processando...</span>
                          </button>
                     </div>
                 </div>
@@ -171,4 +234,47 @@ const formatDate = (date: string) => {
             </div>
         </div>
     </div>
+
+    <!-- Confirmation Modal -->
+    <Transition
+        enter-active-class="transition ease-out duration-150"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition ease-in duration-150"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+    >
+        <div v-if="showConfirmModal" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div class="bg-white dark:bg-surface rounded-2xl shadow-xl max-w-md w-full overflow-hidden border border-gray-100 dark:border-gray-800 transform transition-all scale-100">
+                <div class="p-6 text-center">
+                    <div class="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600 dark:text-red-500">
+                        <AlertTriangle :size="32" />
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Bloquear anúncios?</h3>
+                    <p class="text-gray-600 dark:text-gray-400 mb-6">
+                        Tem certeza que deseja bloquear <strong>{{ user?.nome }}</strong> de anunciar? 
+                        <span class="block mt-2 text-red-600 dark:text-red-400 font-semibold">Todos os anúncios deste usuário serão permanentemente removidos.</span>
+                    </p>
+                    
+                    <div class="flex gap-3 justify-center">
+                        <button 
+                            @click="showConfirmModal = false"
+                            :disabled="isTogglingPermission"
+                            class="px-6 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors font-medium"
+                        >
+                            Cancelar
+                        </button>
+                        <button 
+                            @click="executeToggle"
+                            :disabled="isTogglingPermission"
+                            class="px-6 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
+                        >
+                            <Ban :size="18" />
+                            {{ isTogglingPermission ? 'Bloqueando...' : 'Confirmar' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </Transition>
 </template>
